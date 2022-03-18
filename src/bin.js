@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 const { resolve } = require('path');
+const { existsSync } = require('fs');
 const { program } = require('commander');
 const glob = require('glob');
 const inquirer = require('inquirer');
 const liveServer = require("live-server");
 const exportBook = require('./export-book.js');
 const chalk = require("chalk");
+const {emptyDirSync, ensureDirSync} = require("fs-extra");
 
 // 获取用户家目录
 const USER_HOME = process.env.HOME || process.env.USERPROFILE
@@ -14,6 +16,7 @@ program
     .command('search')
     .description('导出单词')
     .action(async () => {
+        console.log(chalk.blue(`\n> 家目录: ${USER_HOME}\n`));
         const base = resolve(USER_HOME, 'Desktop/flipbooks')
         // const paths = glob.sync('D:/Up366TeacherCache/flipbooks');
         console.log(chalk.blue(`\n> base: ${base}\n`));
@@ -33,7 +36,15 @@ program
                 choices: paths
             }
         ]);
-        exportBook(book);
+
+        const target = resolve(USER_HOME, 'Desktop', 'edit-book-words');
+        if (existsSync(target)) {
+            emptyDirSync(target)
+        } else {
+            ensureDirSync(target)
+        }
+        console.log(chalk.blue(`\n> 导出目录: ${target}`))
+        exportBook(book, target);
         // const root = resolve(__dirname, '../../temp')
         // const params = {
         //     port: 8181, // Set the server port. Defaults to 8080.
