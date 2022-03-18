@@ -16,10 +16,10 @@ program
     .command('search')
     .description('导出单词')
     .action(async () => {
-        console.log(chalk.blue(`\n> 家目录: ${USER_HOME}\n`));
+        console.log(chalk.blue(`\n> 家目录: ${USER_HOME}`));
         const base = resolve(USER_HOME, 'Desktop/flipbooks')
         // const paths = glob.sync('D:/Up366TeacherCache/flipbooks');
-        console.log(chalk.blue(`\n> base: ${base}\n`));
+        console.log(chalk.blue(`> base: ${base}\n`));
         const paths = glob.sync(`${base}/*`);
         if (!paths.length) {
             console.log(chalk.red(`> 没有扫描到课本 \n> 路径: ${base}`))
@@ -37,7 +37,7 @@ program
             }
         ]);
 
-        const target = resolve(USER_HOME, 'Desktop', 'edit-book-words');
+        const target = resolve(USER_HOME, './edit-book-words');
         if (existsSync(target)) {
             emptyDirSync(target)
         } else {
