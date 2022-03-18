@@ -51,7 +51,7 @@ module.exports = function (path, target) {
             writeFileSync(resolve(dest, `index.txt`), '');
             copySync(template, resolve(dest, 'index.html'))
 
-            console.log(chalk.green(` 生成页面数据成功，ID: ${pageId}`))
+            console.log(chalk.blue(`\n 生成页面数据成功，ID: ${pageId}`))
         })
 
         console.log(chalk.green(`\n\n 生成文件成功，路径：${exportDir} \n\n   1.打包该文件提供给产品进行编辑使用 \n\n`))

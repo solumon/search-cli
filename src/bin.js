@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 const { resolve } = require('path');
-const { existsSync } = require('fs');
+const { existsSync, readFileSync, writeFileSync} = require('fs');
 const { program } = require('commander');
 const glob = require('glob');
 const inquirer = require('inquirer');
@@ -13,12 +13,12 @@ const {emptyDirSync, ensureDirSync} = require("fs-extra");
 const USER_HOME = process.env.HOME || process.env.USERPROFILE
 
 program
-    .command('search')
-    .description('导出单词')
+    .command('package')
+    .description('查询课本导出选中课本中的单词数据')
     .action(async () => {
         console.log(chalk.blue(`\n> 家目录: ${USER_HOME}`));
-        const base = resolve(USER_HOME, 'Desktop/flipbooks')
-        // const paths = glob.sync('D:/Up366TeacherCache/flipbooks');
+        // const base = resolve(USER_HOME, 'Desktop/flipbooks')
+        const base = glob.sync('D:/Up366TeacherCache/flipbooks');
         console.log(chalk.blue(`> base: ${base}\n`));
         const paths = glob.sync(`${base}/*`);
         if (!paths.length) {
@@ -45,19 +45,60 @@ program
         }
         console.log(chalk.blue(`\n> 导出目录: ${target}`))
         exportBook(book, target);
-        // const root = resolve(__dirname, '../../temp')
-        // const params = {
-        //     port: 8181, // Set the server port. Defaults to 8080.
-        //     host: "0.0.0.0", // Set the address to bind to. Defaults to 0.0.0.0 or process.env.IP.
-        //     root, // Set root directory that's being served. Defaults to cwd.
-        //     open: false, // When false, it won't load your browser by default.
-        //     ignore: 'scss,my/templates', // comma-separated string for paths to ignore
-        //     file: "index.html", // When set, serve this file (server root relative) for every 404 (useful for single-page applications)
-        //     wait: 1000, // Waits for all changes, before reloading. Defaults to 0 sec.
-        //     mount: [['/components', './node_modules']], // Mount a directory to a route.
-        //     logLevel: 2, // 0 = errors only, 1 = some, 2 = lots
-        //     middleware: [function(req, res, next) { next(); }] // Takes an array of Connect-compatible middleware that are injected into the server middleware stack
-        // };
-        // liveServer.start(params);
     })
+
+program
+    .command('generate')
+    .description('生成趣课堂要使用的json数据')
+    .option('-i, --input <input>', '输入要解析的资源路径')
+    .option('-o, --output <output>', '指定要输出的路径')
+    .action(({ input, output } = {}) => {
+        let source = '';
+        let target = '';
+        if (!input) {
+            source = resolve(USER_HOME, 'edit-book-words');
+        } else {
+            source = resolve(process.cwd(), input)
+        }
+        if (!output) {
+            target = resolve(USER_HOME, 'edit-book-words')
+        } else {
+            target = resolve(process.cwd(), target);
+        }
+        // 读取到修改后的页面单词数据
+        const files = glob.sync(`${source}/*/index.txt`);
+
+        let all = [];
+        files.forEach(file => {
+            const jsonStr = readFileSync(file).toString();
+            if (jsonStr.trim().length) {
+                all = all.concat(JSON.parse(jsonStr))
+            }
+        })
+        // 去重后处理
+        const words = Array.from(new Set(all.map(item => item.word)));
+        all = words.map(word => all.find(item => item.word === word));
+        // 替换使用输入的内容为新的分词结果
+        let mutiIndex = 0;
+        all = all.map(item => {
+            if (item.syllable.join(',') !== item.input.join(',')) {
+                mutiIndex++;
+                return {
+                    word: item.word,
+                    syllable: item.input
+                }
+            } else {
+                return {
+                    word: item.word,
+                    syllable: item.syllable
+                }
+            }
+        })
+        console.log(chalk.green(`\n ☆☆☆☆☆☆☆☆☆☆共有${mutiIndex}个单词被重新分词☆☆☆☆☆☆☆☆☆`))
+        const targetFile = resolve(target, `words.json`);
+        writeFileSync(targetFile, JSON.stringify(all));
+        console.log(chalk.green('\n ☆☆☆☆☆☆☆☆☆☆☆☆生成分词结果成功☆☆☆☆☆☆☆☆☆☆☆☆ \n'))
+})
 program.parse(process.argv);
+
+
