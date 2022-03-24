@@ -1,6 +1,6 @@
 {
   "name": "@solumon/search-cli",
-  "version": "0.2.0",
+  "version": "0.9.0",
   "description": "",
   "publishConfig": {
     "access": "public"
@@ -12,17 +12,21 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "files": [
-    "src"
+    "src",
+    "cache",
+    "temp"
   ],
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "chalk": "^4.1.1",
+    "cheerio": "^1.0.0-rc.10",
     "commander": "^9.0.0",
     "fs-extra": "^10.0.1",
     "glob": "^7.2.0",
     "inquirer": "^8.2.1",
-    "live-server": "^1.2.1"
+    "live-server": "^1.2.1",
+    "request": "^2.88.2"
   }
 }
