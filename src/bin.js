@@ -5,22 +5,29 @@ const { existsSync, readFileSync, writeFileSync} = require('fs');
 const { program } = require('commander');
 const glob = require('glob');
 const inquirer = require('inquirer');
-const liveServer = require("live-server");
-const exportBook = require('./export-book.js');
 const chalk = require("chalk");
 const {emptyDirSync, ensureDirSync} = require("fs-extra");
+const exportBook = require('./export-book.js');
+const excel2json = require('./excel2json.js');
 
 // 获取用户家目录
 const USER_HOME = process.env.HOME || process.env.USERPROFILE
+// 工作目录
+const workDir = resolve(USER_HOME, 'cache-search-cli');
+ensureDirSync(workDir);
+const cacheJson = resolve(workDir, './fans.cli.cache.json')
+
 
 program
-    .command('package')
-    .description('查询课本导出选中课本中的单词数据')
-    .action(async () => {
-        console.log(chalk.cyan(`\n> 家目录: ${USER_HOME}`));
-        const base = resolve(USER_HOME, './Desktop/flipbooks')
-        // const base = 'D:/Up366TeacherCache/flipbooks';
-        console.log(chalk.cyan(`> 查找根路径: ${base}\n`));
+    .command('search')
+    .description('查询课本中的单词数据')
+    .option('-o --output <output>')
+    .action(async ({ output }) => {
+        let base = 'D:/Up366TeacherCache/flipbooks';
+        if (os.platform() === 'darwin') {
+            base = resolve(USER_HOME, './Desktop/flipbooks')
+        }
+        console.log(chalk.cyan(`\n 查找根路径: ${base}\n`));
         const paths = glob.sync(`${base}/*`);
         if (!paths.length) {
             console.log(chalk.red(`> 没有扫描到课本 \n> 查找根路径: ${base}`))
@@ -44,8 +51,33 @@ program
         } else {
             ensureDirSync(target)
         }
-        console.log(chalk.cyan(`\n> 导出目录: ${target}`))
-        exportBook(book, target);
+        let outDir = USER_HOME;
+        if (output) {
+            outDir = resolve(process.cwd(), output);
+        }
+        exportBook(book, outDir);
+    })
+
+program
+    .command('import <path>')
+    .description('导入excel')
+    .action((path) => {
+        if (!path || path.split('.').length < 2) {
+            console.log(chalk.red('\n   参数有误，需要指定一个excel文件路径\n'))
+            return;
+        }
+        let source = resolve(process.cwd(), `./${path}`);
+        let target = cacheJson;
+        const json = excel2json(source) || {}
+        let cache
+        try {
+            cache = JSON.parse(readFileSync(target).toString())
+        } catch (e) {
+            cache = {};
+        }
+        Object.assign(cache, json)
+        writeFileSync(target, JSON.stringify(cache));
+        console.log(chalk.green(`\n『导入单词分词文件成功！\n`))
     })
 
 program

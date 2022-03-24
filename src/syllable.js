@@ -1,6 +1,10 @@
 const request = require('request')
 const cheerio = require('cheerio')
-const URL = 'https://syllablewords.net/syllables-in/'
+const URL = 'https://dict.cn/search'
+const urlList = [
+    'https://syllablewords.net/syllables-in/',
+    'https://dict.cn/search'
+]
 
 
 function requestPromise(url) {
@@ -15,23 +19,28 @@ function requestPromise(url) {
     })
 }
 
+
 function getSyllables(word) {
-    return new Promise(resolve => {
-        setTimeout(() => {
-            resolve(['嘿嘿', '呵呵', '哈哈'])
-        }, 1000)
+    return requestPromise(`${URL}?q=${word}`).then((res) => {
+        const $ = cheerio.load(res.body)
+        // const $h3 = $('.word-info>h3')
+        const $word = $('.word .keyword')
+        // const index = $h3.length - 1
+        // const text = $h3.eq(index).text()
+        const text = $word.attr('tip') || ''
+        // const rawSyllables = text.split('-')
+        const rawSyllablesText = text.replace(/[^A-Za-z·]/g, '');
+        console.log('rawSyllablesText:', rawSyllablesText)
+        if (!rawSyllablesText) {
+            return Promise.resolve([word])
+        }
+        const rawSyllables = rawSyllablesText.split('·')
+        return Promise.resolve(rawSyllables)
+    }).catch((e) => {
+        return Promise.reject(e)
     })
-    // return requestPromise(`${URL}${word}`).then((res) => {
-    //     const $ = cheerio.load(res.body)
-    //     const $h3 = $('.word-info>h3')
-    //     const index = $h3.length - 1
-    //     const text = $h3.eq(index).text()
-    //     const rawSyllables = text.split('-')
-    //     return Promise.resolve(rawSyllables)
-    // }).catch((e) => {
-    //     return Promise.resolve('---')
-    // })
 }
+
 
 module.exports = getSyllables
 
