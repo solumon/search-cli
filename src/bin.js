@@ -80,6 +80,21 @@ program
         console.log(chalk.green(`\n『导入单词分词文件成功！\n`))
     })
 
+
+program
+    .command('update')
+    .description('更新分词文件')
+    .option('-i, --input <input>', '输入需要更新的分词表')
+    .option('-o, --output <output>', '指定要输出的路径')
+    .action(({ input, output } = {}) => {
+        console.log('更新分词文件')
+        console.log('input:', input ? resolve(process.cwd(), input) : resolve(workDir, 'words-update.xlsx'))
+        console.log('output:', output ? resolve(process.cwd(), output) : resolve(workDir, 'news-words-update.xlsx'))
+
+
+
+})
+
 program
     .command('generate')
     .description('生成趣课堂要使用的json数据')
