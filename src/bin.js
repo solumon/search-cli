@@ -7,9 +7,11 @@ const glob = require('glob');
 const inquirer = require('inquirer');
 const chalk = require("chalk");
 const {emptyDirSync, ensureDirSync} = require("fs-extra");
-const exportBook = require('./export-book.js');
+const { searchWords } = require('./export-book.js');
 const excel2json = require('./excel2json.js');
-
+const { parseExcel, writeExcel } = require('./excel/index.js')
+const { updateSyllableRow } = require('./syllable/index.js');
+const {syllablesMaps, untreated, syllableOnline} = require("./export-book");
 // 获取用户家目录
 const USER_HOME = process.env.HOME || process.env.USERPROFILE
 // 工作目录
@@ -21,11 +23,12 @@ const cacheJson = resolve(workDir, './fans.cli.cache.json')
 program
     .command('search')
     .description('查询课本中的单词数据')
-    .option('-o --output <output>')
-    .action(async ({ output }) => {
+    .option('-m, --map <map>', '指定默认已经分词的excel文件')
+    .option('-o --output <output>', '指定分完词后输出文件夹位置')
+    .action(async ({ map ,output }) => {
         let base = 'D:/Up366TeacherCache/flipbooks';
         if (os.platform() === 'darwin') {
-            base = resolve(USER_HOME, './Desktop/flipbooks')
+            base = resolve(USER_HOME, './flipbooks')
         }
         console.log(chalk.cyan(`\n 查找根路径: ${base}\n`));
         const paths = glob.sync(`${base}/*`);
@@ -34,65 +37,59 @@ program
             return;
         }
         // 搜索到课本路径
-        const { path: book } = await inquirer.prompt([
+        const { books } = await inquirer.prompt([
             {
-                type:"list",
-                message:"请选择课本扫描：",
-                name:"path",
-                prefix:"☆☆☆☆",
-                suffix:"☆☆☆☆",
-                choices: paths
+                type:"checkbox",
+                message:"请选择课本：",
+                name:"books",
+                choices: paths,
+                pageSize: 5
             }
         ]);
 
-        const target = resolve(USER_HOME, './edit-book-words');
-        if (existsSync(target)) {
-            emptyDirSync(target)
-        } else {
-            ensureDirSync(target)
-        }
         let outDir = USER_HOME;
         if (output) {
             outDir = resolve(process.cwd(), output);
         }
-        exportBook(book, outDir);
-    })
+        /// 查询课本中的单词
+        const words = await searchWords(books);
 
-program
-    .command('import <path>')
-    .description('导入excel')
-    .action((path) => {
-        if (!path || path.split('.').length < 2) {
-            console.log(chalk.red('\n   参数有误，需要指定一个excel文件路径\n'))
+        return;
+        /// 查询分词缓存字典（excel文件）
+        const { cache, excel } = syllablesMaps(map ? resolve(process.cwd(), map) : '');
+        /// 查询需要做分词的单词列表
+        // const needSyllableWords = untreated(words, cache)
+        const needSyllableWords = ['hello']
+        if (!needSyllableWords.length) {
+            console.log('没有需要分词的数据')
             return;
         }
-        let source = resolve(process.cwd(), `./${path}`);
-        let target = cacheJson;
-        const json = excel2json(source) || {}
-        let cache
-        try {
-            cache = JSON.parse(readFileSync(target).toString())
-        } catch (e) {
-            cache = {};
-        }
-        Object.assign(cache, json)
-        writeFileSync(target, JSON.stringify(cache));
-        console.log(chalk.green(`\n『导入单词分词文件成功！\n`))
+        /// 在线分词
+        const result = await syllableOnline(needSyllableWords);
+
+        /// 将需要人工确认的分词信息写入到文件导出
+        const needCheck = []
+        Object.keys(result).forEach(item => {
+            needCheck.push([item, result[item]])
+        })
+        const buffer = [...needCheck ,...excel]
+        const outputFile = output ? resolve(process.cwd(), output, 'updated-all-words.xlsx') : resolve(workDir, 'updated-all-words.xlsx');
+        writeExcel(outputFile, buffer);
     })
-
-
 program
     .command('update')
     .description('更新分词文件')
     .option('-i, --input <input>', '输入需要更新的分词表')
     .option('-o, --output <output>', '指定要输出的路径')
     .action(({ input, output } = {}) => {
-        console.log('更新分词文件')
-        console.log('input:', input ? resolve(process.cwd(), input) : resolve(workDir, 'words-update.xlsx'))
-        console.log('output:', output ? resolve(process.cwd(), output) : resolve(workDir, 'news-words-update.xlsx'))
-
-
-
+        if (!input) {
+            throw  new Error('请指定导入需要更新的分词表')
+        }
+        const inputFile =  input ? resolve(process.cwd(), input) : resolve(workDir, 'updated-all-words.xlsx');
+        const outputFile = output ? resolve(process.cwd(), output, 'updated-all-words.xlsx') : resolve(workDir, 'updated-all-words.xlsx');
+        const list = parseExcel(inputFile)
+        const result = list.map(updateSyllableRow)
+        writeExcel(outputFile, result);
 })
 
 program
@@ -101,68 +98,17 @@ program
     .option('-i, --input <input>', '输入要解析的资源路径')
     .option('-o, --output <output>', '指定要输出的路径')
     .action(({ input, output } = {}) => {
-        let source = '';
-        let target = '';
-        if (!input) {
-            source = resolve(USER_HOME, 'edit-book-words');
-        } else {
-            source = resolve(process.cwd(), input)
-        }
-        if (!output) {
-            target = resolve(USER_HOME, 'edit-book-words')
-        } else {
-            target = resolve(process.cwd(), target);
-        }
-        // 读取到修改后的页面单词数据
-        const files = glob.sync(`${source}/*/index.txt`);
-
-        let all = [];
-        files.forEach(file => {
-            const jsonStr = readFileSync(file).toString();
-            if (jsonStr.trim().length) {
-                all = all.concat(JSON.parse(jsonStr))
+        const inputFile = resolve(__dirname, 'cache/cache.xlsx');
+        const outputFile = output ? resolve(process.cwd(), output, 'syllables-words-map.json') : resolve(__dirname, 'cache/cache.xlsx');
+        const list = parseExcel(inputFile)
+        const map = {}
+        list.forEach(([word, syllables, check]) => {
+            if (check === '已校验') {
+                map[word] = syllables.split(',')
             }
         })
-        // 去重后处理
-        const words = Array.from(new Set(all.map(item => item.word)));
-        all = words.map(word => all.find(item => item.word === word));
-        // 替换使用输入的内容为新的分词结果
-        const edited = (p1, p2) => {
-            if (!p1.length || !p2.length) return false;
-            if (p1.length !== p2.length) return false;
-            let result = true;
-            for (let i = 0; i < p1.length; i++) {
-                const t1 = p1[i];
-                const t2 = p2[i];
-                if (t1 !== t2) {
-                    result = false;
-                    break;
-                }
-            }
-            return  result;
-        }
-
-        console.log('all', JSON.stringify(all))
-        let mutiIndex = 0;
-        all = all.map(item => {
-            if (edited(item.syllable, item.input)) {
-                mutiIndex++;
-                return {
-                    word: item.word,
-                    syllable: item.input
-                }
-            } else {
-                return {
-                    word: item.word,
-                    syllable: item.syllable
-                }
-            }
-        })
-        console.log(chalk.green(`\n ☆☆☆☆☆共有${mutiIndex}个单词被重新分词☆☆☆☆☆☆☆☆☆`))
-        const targetFile = resolve(target, `words.json`);
-        writeFileSync(targetFile, JSON.stringify(all));
-        console.log(chalk.green(`\n ☆☆☆☆☆生成分词结果成功☆☆☆☆☆☆☆☆☆☆☆☆ \n ☆☆☆☆☆路径：${targetFile}`))
+        writeFileSync(outputFile, JSON.stringify(map))
+        console.log(chalk.green(`\n\n   生成成功：${outputFile}\n`))
 })
 program.parse(process.argv);
-
 
